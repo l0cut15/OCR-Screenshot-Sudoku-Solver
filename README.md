@@ -13,6 +13,8 @@ An AI web application that processes images of Sudoku puzzles, extracts digits t
 
 ## Quick Start
 
+### Local Development
+
 ```bash
 # Setup
 python3 -m venv venv
@@ -21,6 +23,19 @@ pip install -r requirements.txt
 
 # Run server
 python main.py
+
+# Access at http://localhost:8000
+```
+
+### Docker Deployment
+
+```bash
+# Using docker-compose (recommended)
+docker-compose up -d
+
+# Or using Docker directly
+docker build -t sudoku-solver .
+docker run -d -p 8000:8000 sudoku-solver
 
 # Access at http://localhost:8000
 ```
