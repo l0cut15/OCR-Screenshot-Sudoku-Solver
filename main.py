@@ -16,6 +16,9 @@ import numpy as np
 from PIL import Image
 import io
 import logging
+import argparse
+import os
+from dotenv import load_dotenv
 from loguru import logger
 from ocr_processor import OCRProcessor
 from sudoku_solver import SudokuSolver, create_sudoku_validator
@@ -125,4 +128,21 @@ async def solve_sudoku(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Load environment variables from .env file
+    load_dotenv()
+    
+    parser = argparse.ArgumentParser(description="AI Sudoku Solver Server")
+    parser.add_argument("--port", "-p", type=int, 
+                       default=int(os.getenv("SUDOKU_PORT", 8000)),
+                       help="Port to run the server on (default: from .env or 8000)")
+    parser.add_argument("--host", type=str, 
+                       default=os.getenv("SUDOKU_HOST", "0.0.0.0"),
+                       help="Host to bind the server to (default: from .env or 0.0.0.0)")
+    args = parser.parse_args()
+    
+    # Command line arguments override environment variables
+    port = args.port
+    host = args.host
+    
+    print(f"Starting AI Sudoku Solver server at http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port)

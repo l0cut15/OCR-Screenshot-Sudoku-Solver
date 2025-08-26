@@ -8,7 +8,7 @@ from typing import List, Tuple, Optional
 
 class SudokuSolver:
     def __init__(self):
-        \"\"\"Initialize the Sudoku solver.\"\"\"
+        """Initialize the Sudoku solver."""
         self.grid = None
     
     def is_valid(self, grid: List[List[int]], row: int, col: int, num: int) -> bool:
