@@ -32,13 +32,16 @@ python main.py
 #### Published Image (Recommended)
 ```bash
 # Run latest published image
-docker run -p 8000:8000 ghcr.io/l0cut15/sudoku:latest
+docker run -p 8000:8000 ghcr.io/l0cut15/ocr-screenshot-sudoku-solver:latest
+
+# Or run specific version
+docker run -p 8000:8000 ghcr.io/l0cut15/ocr-screenshot-sudoku-solver:v1.2.1
 
 # Or using docker-compose with published image
 version: '3.8'
 services:
   sudoku-solver:
-    image: ghcr.io/l0cut15/sudoku:latest
+    image: ghcr.io/l0cut15/ocr-screenshot-sudoku-solver:latest
     ports:
       - "8000:8000"
     restart: unless-stopped

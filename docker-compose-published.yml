@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   sudoku-solver:
-    image: ghcr.io/l0cut15/sudoku:latest
+    image: ghcr.io/l0cut15/ocr-screenshot-sudoku-solver:latest
     ports:
       - "8000:8000"
     environment:
