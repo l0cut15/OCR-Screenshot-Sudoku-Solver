@@ -29,8 +29,27 @@ python main.py
 
 ### Docker Deployment
 
+#### Published Image (Recommended)
 ```bash
-# Using docker-compose (recommended)
+# Run latest published image
+docker run -p 8000:8000 ghcr.io/l0cut15/sudoku:latest
+
+# Or using docker-compose with published image
+version: '3.8'
+services:
+  sudoku-solver:
+    image: ghcr.io/l0cut15/sudoku:latest
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+# Save as docker-compose-published.yml and run:
+# docker-compose -f docker-compose-published.yml up -d
+```
+
+#### Build Locally
+```bash
+# Using docker-compose (builds from source)
 docker-compose up -d
 
 # Or using Docker directly
