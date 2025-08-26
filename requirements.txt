@@ -1,0 +1,13 @@
+# Essential OCR and Computer Vision
+opencv-python
+easyocr
+Pillow
+numpy
+
+# Web Framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Utilities
+loguru

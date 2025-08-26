@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Sudoku Solver</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Upload Section */
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f4ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .upload-hint {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Image Preview */
+        .image-preview {
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .preview-img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Results */
+        .results {
+            display: none;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Sudoku Grid */
+        .sudoku-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 2px;
+            background: #333;
+            border-radius: 8px;
+            padding: 8px;
+            margin: 20px auto;
+            width: fit-content;
+        }
+
+        .sudoku-cell {
+            background: white;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sudoku-cell:hover {
+            background: #f0f4ff;
+        }
+
+        .sudoku-cell.given {
+            background: #e8f4f8;
+            color: #2c5282;
+        }
+
+        .sudoku-cell.solved {
+            background: #f0fff4;
+            color: #22543d;
+        }
+
+        .sudoku-cell.error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .sudoku-cell.uncertain {
+            background: #fef5e7;
+            color: #c05621;
+        }
+
+        .sudoku-cell.enhanced {
+            background: #e6fffa;
+            color: #234e52;
+            position: relative;
+        }
+
+        .sudoku-cell.enhanced::after {
+            content: "🎯";
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            font-size: 10px;
+        }
+
+        /* Thick borders for 3x3 boxes */
+        .sudoku-cell:nth-child(3n):not(:nth-child(9n)) {
+            border-right: 3px solid #333;
+        }
+        
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+        .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 3px solid #333;
+        }
+
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        /* Actions */
+        .actions {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        /* Correction Mode */
+        .correction-mode {
+            display: none;
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .correction-mode h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .correction-instructions {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .close {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        /* Error Messages */
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px;
+            }
+            
+            .sudoku-cell {
+                width: 35px;
+                height: 35px;
+                font-size: 14px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-robot"></i> AI Sudoku Solver</h1>
+            <p>Upload your Sudoku puzzle image for instant AI-powered solving</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Upload Section -->
+            <section class="section">
+                <h2><i class="fas fa-upload"></i> Upload Puzzle</h2>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <div class="upload-text">
+                        Drop your Sudoku image here or click to browse
+                    </div>
+                    <div class="upload-hint">
+                        Supports PNG, JPG, JPEG files
+                    </div>
+                    <input type="file" id="fileInput" accept="image/*">
+                </div>
+
+                <div class="image-preview" id="imagePreview">
+                    <img id="previewImg" class="preview-img" alt="Preview">
+                    <div style="margin-top: 15px;">
+                        <button class="btn" id="processBtn">
+                            <i class="fas fa-magic"></i> Process Puzzle
+                        </button>
+                        <button class="btn btn-secondary" id="clearBtn">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loading -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>AI is analyzing your Sudoku puzzle...</p>
+                <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                    This may take a few seconds
+                </p>
+            </div>
+
+            <!-- Error Message -->
+            <div class="error-message" id="errorMessage"></div>
+            <div class="success-message" id="successMessage"></div>
+
+            <!-- Results Section -->
+            <section class="results" id="results">
+                <h2><i class="fas fa-puzzle-piece"></i> Results</h2>
+
+                <!-- Stats -->
+                <div class="stats" id="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="accuracyStat">-</div>
+                        <div class="stat-label">OCR Accuracy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="digitsStat">-</div>
+                        <div class="stat-label">Digits Found</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="timeStat">-</div>
+                        <div class="stat-label">Processing Time</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statusStat">-</div>
+                        <div class="stat-label">Status</div>
+                    </div>
+                </div>
+
+                <!-- Correction Mode -->
+                <div class="correction-mode" id="correctionMode">
+                    <h3><i class="fas fa-edit"></i> OCR Correction Mode</h3>
+                    <div class="correction-instructions">
+                        Click on any cell in the detected grid below to correct OCR errors.
+                        Empty cells can be filled, and incorrect digits can be changed.
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" id="applyCorrectionBtn">
+                            <i class="fas fa-check"></i> Apply Corrections
+                        </button>
+                        <button class="btn btn-secondary" id="cancelCorrectionBtn">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <!-- Detected Grid -->
+                    <div class="sudoku-container">
+                        <h3 style="text-align: center; margin-bottom: 20px; color: #333;">
+                            <i class="fas fa-eye"></i> Detected Grid
+                            <button class="btn btn-warning" id="correctBtn" style="margin-left: 15px; font-size: 0.8em;">
+                                <i class="fas fa-edit"></i> Correct OCR
+                            </button>
+                        </h3>
+                        <div class="sudoku-grid" id="detectedGrid"></div>
+                        <div id="detectedLegend" style="text-align: center; font-size: 0.9em; color: #666;">
+                            <div><span style="background: #e8f4f8; padding: 2px 8px; border-radius: 4px;">Given</span> 
+                            <span style="background: #fef5e7; padding: 2px 8px; border-radius: 4px;">Uncertain</span>
+                            <span style="background: #e6fffa; padding: 2px 8px; border-radius: 4px;">Enhanced 🎯</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Solution Grid -->
+                    <div class="sudoku-container">
+                        <h3 style="text-align: center; margin-bottom: 20px; color: #333;">
+                            <i class="fas fa-check-circle"></i> Complete Solution
+                        </h3>
+                        <div class="sudoku-grid" id="solutionGrid"></div>
+                        <div style="text-align: center; font-size: 0.9em; color: #666;">
+                            <div><span style="background: #e8f4f8; padding: 2px 8px; border-radius: 4px;">Given</span> 
+                            <span style="background: #f0fff4; padding: 2px 8px; border-radius: 4px;">Solved</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="actions">
+                    <button class="btn" id="newPuzzleBtn">
+                        <i class="fas fa-plus"></i> Solve Another Puzzle
+                    </button>
+                    <button class="btn btn-secondary" id="downloadBtn">
+                        <i class="fas fa-download"></i> Download Solution
+                    </button>
+                    <button class="btn btn-secondary" id="shareBtn">
+                        <i class="fas fa-share"></i> Share Result
+                    </button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Cell Edit Modal -->
+    <div class="modal" id="cellModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Cell</h3>
+                <span class="close" id="closeModal">&times;</span>
+            </div>
+            <div>
+                <p style="margin-bottom: 15px;">Cell position: <span id="cellPosition"></span></p>
+                <p style="margin-bottom: 15px;">Current value: <span id="currentValue"></span></p>
+                <label for="newValue" style="display: block; margin-bottom: 10px;">New value (0-9, 0 = empty):</label>
+                <input type="number" id="newValue" min="0" max="9" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 20px;">
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" id="cancelEdit">Cancel</button>
+                    <button class="btn" id="saveEdit">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
