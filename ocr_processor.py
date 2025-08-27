@@ -655,10 +655,11 @@ class OCRProcessor:
 
     def process_cells(self, cells: List[List[np.ndarray]]) -> List[List[CellDetection]]:
         """
-        Process all cells using ensemble recognition
+        Process all cells using ensemble recognition with validation
         """
         results = []
         
+        # First pass: Initial OCR recognition
         for i, row in enumerate(cells):
             result_row = []
             for j, cell in enumerate(row):
@@ -667,7 +668,171 @@ class OCRProcessor:
                 result_row.append(detection)
             results.append(result_row)
         
-        return results
+        # Second pass: Validate against Sudoku rules and reassess low-confidence conflicts
+        validated_results, validation_conflicts = self.validate_and_reassess(results, cells)
+        
+        # Store validation conflicts for reporting
+        self.validation_conflicts = validation_conflicts
+        
+        return validated_results
+    
+    def validate_and_reassess(self, detections: List[List[CellDetection]], cells: List[List[np.ndarray]]) -> Tuple[List[List[CellDetection]], List[Dict]]:
+        """
+        Validate OCR results against Sudoku rules and reassess conflicting low-confidence digits
+        """
+        # Convert detections to grid format for validation
+        current_grid = [[det.digit for det in row] for row in detections]
+        
+        # Find all conflicts
+        conflicts = self.find_sudoku_conflicts(current_grid)
+        original_conflicts = [conflict.copy() for conflict in conflicts]  # Store for reporting
+        
+        # Process each conflict
+        for conflict in conflicts:
+            row, col, digit = conflict['row'], conflict['col'], conflict['value']
+            detection = detections[row][col]
+            
+            # Only reassess if confidence is below threshold (uncertain digits)
+            if detection.confidence < 0.8:  # Configurable threshold
+                logger.info(f"Reassessing low-confidence digit {digit} at ({row}, {col}) due to Sudoku rule violation")
+                
+                # Try enhanced recovery methods
+                cell = cells[row][col]
+                new_digit, new_confidence, new_sources = self.reassess_conflicted_digit(
+                    cell, current_grid, row, col, detection
+                )
+                
+                if new_digit != digit:
+                    logger.info(f"Reassessment changed digit from {digit} to {new_digit} at ({row}, {col})")
+                    # Update the detection
+                    detections[row][col] = CellDetection(
+                        new_digit, new_confidence, new_sources, (row, col)
+                    )
+                    # Update current grid for subsequent validations
+                    current_grid[row][col] = new_digit
+        
+        return detections, original_conflicts
+    
+    def find_sudoku_conflicts(self, grid: List[List[int]]) -> List[Dict]:
+        """
+        Find all cells that violate Sudoku rules
+        """
+        conflicts = []
+        
+        for row in range(9):
+            for col in range(9):
+                digit = grid[row][col]
+                if digit != 0 and not self.is_valid_placement(grid, row, col, digit):
+                    conflicts.append({
+                        'row': row,
+                        'col': col,
+                        'value': digit,
+                        'conflict_type': self.get_conflict_type(grid, row, col, digit)
+                    })
+        
+        return conflicts
+    
+    def is_valid_placement(self, grid: List[List[int]], row: int, col: int, digit: int) -> bool:
+        """
+        Check if placing digit at (row, col) violates Sudoku rules
+        """
+        # Temporarily clear the cell for validation
+        original = grid[row][col]
+        grid[row][col] = 0
+        
+        # Check row
+        for j in range(9):
+            if grid[row][j] == digit:
+                grid[row][col] = original
+                return False
+        
+        # Check column
+        for i in range(9):
+            if grid[i][col] == digit:
+                grid[row][col] = original
+                return False
+        
+        # Check 3x3 box
+        box_row, box_col = 3 * (row // 3), 3 * (col // 3)
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if grid[i][j] == digit:
+                    grid[row][col] = original
+                    return False
+        
+        grid[row][col] = original
+        return True
+    
+    def get_conflict_type(self, grid: List[List[int]], row: int, col: int, digit: int) -> str:
+        """
+        Determine the type of Sudoku rule violation
+        """
+        original = grid[row][col]
+        grid[row][col] = 0
+        
+        # Check row conflict
+        for j in range(9):
+            if grid[row][j] == digit:
+                grid[row][col] = original
+                return 'row'
+        
+        # Check column conflict
+        for i in range(9):
+            if grid[i][col] == digit:
+                grid[row][col] = original
+                return 'column'
+        
+        # Check box conflict
+        box_row, box_col = 3 * (row // 3), 3 * (col // 3)
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if grid[i][j] == digit:
+                    grid[row][col] = original
+                    return 'box'
+        
+        grid[row][col] = original
+        return 'unknown'
+    
+    def reassess_conflicted_digit(self, cell: np.ndarray, current_grid: List[List[int]], 
+                                row: int, col: int, original_detection: CellDetection) -> Tuple[int, float, List[str]]:
+        """
+        Reassess a conflicted digit using enhanced methods and rule-based filtering
+        """
+        # Try enhanced recovery first
+        enhanced_digit, enhanced_conf = self.enhanced_digit_recovery(cell)
+        
+        # Get all possible digits from different OCR methods
+        candidates = []
+        
+        # EasyOCR
+        easy_digit, easy_conf = self.recognize_digit_easyocr(cell)
+        if easy_digit != 0:
+            candidates.append((easy_digit, easy_conf, 'easyocr'))
+        
+        # Template matching
+        template_digit, template_conf = self.recognize_digit_template(cell)
+        if template_digit != 0:
+            candidates.append((template_digit, template_conf, 'template'))
+        
+        # Enhanced recovery
+        if enhanced_digit != 0:
+            candidates.append((enhanced_digit, enhanced_conf, 'enhanced_recovery'))
+        
+        # Filter candidates by Sudoku rules
+        valid_candidates = []
+        for digit, conf, source in candidates:
+            if self.is_valid_placement(current_grid, row, col, digit):
+                valid_candidates.append((digit, conf, source))
+        
+        if valid_candidates:
+            # Choose the highest confidence valid candidate
+            best_digit, best_conf, best_source = max(valid_candidates, key=lambda x: x[1])
+            logger.info(f"Found valid alternative: {best_digit} (confidence: {best_conf:.3f}) from {best_source}")
+            return best_digit, best_conf, [best_source]
+        else:
+            # If no valid candidates, mark as empty (let solver handle it)
+            logger.info(f"No valid alternatives found, marking cell as empty")
+            return 0, 0.0, ['rule_validation']
     
     def process_image(self, image_path_or_array) -> Dict[str, Any]:
         """
@@ -745,6 +910,7 @@ class OCRProcessor:
             "confidence_scores": confidence_scores,
             "recognition_sources": recognition_sources,
             "uncertain_cells": uncertain_cells,
+            "validation_conflicts": getattr(self, 'validation_conflicts', []),
             "processing_time": processing_time,
             "valid_puzzle": len(given_positions) >= 17,  # Minimum clues for valid Sudoku
             "unique_solution": False,  # Will be determined by solver

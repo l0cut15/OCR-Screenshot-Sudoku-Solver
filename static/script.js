@@ -156,6 +156,14 @@ class SudokuSolver {
                 '<div style="text-align: center; color: #999; padding: 40px;">No solution available</div>';
         }
 
+        // Validate and highlight conflicts in the initial grid
+        this.validateAndHighlightConflicts(result.original_grid);
+        
+        // Show validation summary if there were conflicts
+        if (result.validation_conflicts && result.validation_conflicts.length > 0) {
+            this.showValidationSummary(result.validation_conflicts);
+        }
+
         // Show results section
         document.getElementById('results').style.display = 'block';
         
@@ -246,11 +254,21 @@ class SudokuSolver {
             this.correctedGrid = this.currentResult.original_grid.map(row => [...row]);
         }
 
+        // Validate the new value doesn't break Sudoku rules
+        if (newValue !== 0 && !this.isValidPlacement(this.correctedGrid, row, col, newValue)) {
+            const conflict = this.findConflict(this.correctedGrid, row, col, newValue);
+            this.showError(`Invalid placement: ${newValue} conflicts with ${conflict.type} ${conflict.location}`);
+            return;
+        }
+
         // Update the corrected grid
+        const oldValue = this.correctedGrid[row][col];
         this.correctedGrid[row][col] = newValue;
 
         // Update the display
         element.textContent = newValue || '';
+        element.classList.remove('error'); // Remove any previous error styling
+        
         if (newValue !== 0) {
             element.classList.add('given');
             element.style.backgroundColor = '#e3f2fd'; // Light blue for edited cells
@@ -259,7 +277,11 @@ class SudokuSolver {
             element.style.backgroundColor = '';
         }
 
+        // Check if this change resolves any conflicts in other cells
+        this.updateConflictDisplay();
+
         this.closeModal();
+        this.showSuccess(`Cell (${row + 1}, ${col + 1}) updated successfully`);
     }
 
     enterCorrectionMode() {
@@ -359,6 +381,174 @@ class SudokuSolver {
         });
     }
 
+    // Validation methods for Sudoku rules
+    isValidPlacement(grid, row, col, num) {
+        // Temporarily store the current value and clear it for validation
+        const originalValue = grid[row][col];
+        grid[row][col] = 0;
+
+        // Check row
+        for (let j = 0; j < 9; j++) {
+            if (grid[row][j] === num) {
+                grid[row][col] = originalValue; // Restore original value
+                return false;
+            }
+        }
+
+        // Check column
+        for (let i = 0; i < 9; i++) {
+            if (grid[i][col] === num) {
+                grid[row][col] = originalValue; // Restore original value
+                return false;
+            }
+        }
+
+        // Check 3x3 box
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        
+        for (let i = boxRow; i < boxRow + 3; i++) {
+            for (let j = boxCol; j < boxCol + 3; j++) {
+                if (grid[i][j] === num) {
+                    grid[row][col] = originalValue; // Restore original value
+                    return false;
+                }
+            }
+        }
+
+        grid[row][col] = originalValue; // Restore original value
+        return true;
+    }
+
+    findConflict(grid, row, col, num) {
+        // Temporarily store the current value and clear it for conflict detection
+        const originalValue = grid[row][col];
+        grid[row][col] = 0;
+
+        // Check row
+        for (let j = 0; j < 9; j++) {
+            if (grid[row][j] === num) {
+                grid[row][col] = originalValue;
+                return { type: 'row', location: `${row + 1}` };
+            }
+        }
+
+        // Check column
+        for (let i = 0; i < 9; i++) {
+            if (grid[i][col] === num) {
+                grid[row][col] = originalValue;
+                return { type: 'column', location: `${col + 1}` };
+            }
+        }
+
+        // Check 3x3 box
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        const boxNumber = Math.floor(row / 3) * 3 + Math.floor(col / 3) + 1;
+        
+        for (let i = boxRow; i < boxRow + 3; i++) {
+            for (let j = boxCol; j < boxCol + 3; j++) {
+                if (grid[i][j] === num) {
+                    grid[row][col] = originalValue;
+                    return { type: 'box', location: `${boxNumber}` };
+                }
+            }
+        }
+
+        grid[row][col] = originalValue;
+        return { type: 'unknown', location: 'unknown' };
+    }
+
+    updateConflictDisplay() {
+        if (!this.correctedGrid) return;
+
+        const cells = document.querySelectorAll('#detectedGrid .sudoku-cell');
+        cells.forEach((cell, index) => {
+            const row = Math.floor(index / 9);
+            const col = index % 9;
+            const value = this.correctedGrid[row][col];
+            
+            // Remove error styling first
+            cell.classList.remove('error');
+            
+            // Check if this cell has conflicts
+            if (value !== 0) {
+                if (!this.isValidPlacement(this.correctedGrid, row, col, value)) {
+                    cell.classList.add('error');
+                }
+            }
+        });
+    }
+
+    validateEntireGrid(grid) {
+        const conflicts = [];
+        
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                const value = grid[row][col];
+                if (value !== 0 && !this.isValidPlacement(grid, row, col, value)) {
+                    const conflict = this.findConflict(grid, row, col, value);
+                    conflicts.push({
+                        row,
+                        col,
+                        value,
+                        conflict: conflict
+                    });
+                }
+            }
+        }
+        
+        return conflicts;
+    }
+
+    validateAndHighlightConflicts(grid) {
+        const conflicts = this.validateEntireGrid(grid);
+        
+        if (conflicts.length > 0) {
+            // Highlight conflicted cells in the detected grid
+            const cells = document.querySelectorAll('#detectedGrid .sudoku-cell');
+            conflicts.forEach(conflict => {
+                const index = conflict.row * 9 + conflict.col;
+                if (cells[index]) {
+                    cells[index].classList.add('error');
+                    cells[index].title = `Conflict: ${conflict.value} conflicts with ${conflict.conflict.type} ${conflict.conflict.location}`;
+                }
+            });
+        }
+        
+        return conflicts;
+    }
+
+    showValidationSummary(conflicts) {
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'validation-summary';
+        summaryDiv.style.cssText = `
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+        `;
+        
+        summaryDiv.innerHTML = `
+            <h4 style="margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Rule Validation Summary</h4>
+            <p>Found ${conflicts.length} Sudoku rule violation(s) that were automatically resolved:</p>
+            <ul style="margin: 10px 0 0 20px;">
+                ${conflicts.map(c => 
+                    `<li>Cell (${c.row + 1}, ${c.col + 1}): Digit ${c.value} conflicts with ${c.conflict_type}</li>`
+                ).join('')}
+            </ul>
+            <p style="margin-top: 10px; font-size: 0.9em;">
+                <i class="fas fa-info-circle"></i> Low-confidence conflicting digits were reassessed using enhanced OCR methods.
+            </p>
+        `;
+        
+        // Insert after the stats section
+        const statsSection = document.getElementById('stats');
+        statsSection.parentNode.insertBefore(summaryDiv, statsSection.nextSibling);
+    }
+
     downloadSolution() {
         if (!this.currentResult || !this.currentResult.solved_grid) {
             this.showError('No solution available to download');
@@ -396,24 +586,98 @@ class SudokuSolver {
             return;
         }
 
-        const text = `I solved a Sudoku puzzle using AI! 🤖\\n` +
-                    `OCR Accuracy: ${(this.currentResult.accuracy_estimate * 100).toFixed(1)}%\\n` +
-                    `Processing Time: ${this.currentResult.processing_time.toFixed(2)}s\\n` +
+        const text = `I solved a Sudoku puzzle using AI! 🤖\n` +
+                    `OCR Accuracy: ${(this.currentResult.accuracy_estimate * 100).toFixed(1)}%\n` +
+                    `Processing Time: ${this.currentResult.processing_time.toFixed(2)}s\n` +
                     `Digits Found: ${this.currentResult.given_positions.length}`;
 
-        if (navigator.share) {
+        // Try Web Share API first (mobile devices)
+        if (navigator.share && navigator.canShare && navigator.canShare({ text: text })) {
             navigator.share({
                 title: 'AI Sudoku Solver Result',
                 text: text
+            }).catch((error) => {
+                console.log('Share failed:', error);
+                this.fallbackShare(text);
             });
-        } else {
-            // Fallback: copy to clipboard
+        } else if (navigator.clipboard && window.isSecureContext) {
+            // Use Clipboard API if available (HTTPS only)
             navigator.clipboard.writeText(text).then(() => {
                 this.showSuccess('Result copied to clipboard!');
-            }).catch(() => {
-                this.showError('Could not copy to clipboard');
+            }).catch((error) => {
+                console.log('Clipboard failed:', error);
+                this.fallbackShare(text);
             });
+        } else {
+            // Final fallback
+            this.fallbackShare(text);
         }
+    }
+
+    fallbackShare(text) {
+        // Create a temporary textarea element for copying
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        
+        try {
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile devices
+            const successful = document.execCommand('copy');
+            
+            if (successful) {
+                this.showSuccess('Result copied to clipboard!');
+            } else {
+                // If even execCommand fails, show the text in a modal
+                this.showShareModal(text);
+            }
+        } catch (err) {
+            console.log('execCommand failed:', err);
+            this.showShareModal(text);
+        } finally {
+            document.body.removeChild(textarea);
+        }
+    }
+
+    showShareModal(text) {
+        // Create a simple modal to display the text for manual copying
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+        `;
+        
+        const content = document.createElement('div');
+        content.style.cssText = `
+            background: white; padding: 30px; border-radius: 15px;
+            max-width: 500px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        `;
+        
+        content.innerHTML = `
+            <h3 style="margin-bottom: 20px;">Share Your Result</h3>
+            <textarea readonly style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-family: inherit;" onclick="this.select()">${text}</textarea>
+            <p style="margin: 15px 0; color: #666; font-size: 0.9em;">Click the text above to select it, then copy (Ctrl+C/Cmd+C)</p>
+            <div style="text-align: right;">
+                <button style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+            </div>
+        `;
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // Close modal on button click or outside click
+        const closeBtn = content.querySelector('button');
+        closeBtn.onclick = () => document.body.removeChild(modal);
+        modal.onclick = (e) => {
+            if (e.target === modal) document.body.removeChild(modal);
+        };
+        
+        // Auto-select the textarea
+        const textarea = content.querySelector('textarea');
+        setTimeout(() => textarea.select(), 100);
     }
 
     gridToString(grid) {

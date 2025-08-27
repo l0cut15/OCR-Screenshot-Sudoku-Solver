@@ -48,10 +48,8 @@ Dockerfile*
 .dockerignore
 docker-compose*.yml
 
-# Documentation (keep essential docs)
+# Documentation - exclude all for smaller image
 *.md
-!USER_GUIDE.md
-!README.md
 
 # Test files
 test_*.py
@@ -66,3 +64,19 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Sample files and other large files
+sample-*.png
+sample-*.jpg
+*.png
+*.jpg
+*.jpeg
+!static/*.png
+!static/*.jpg
+!static/*.jpeg
+
+# GitHub workflows
+.github/
+
+# Other project files
+build.log

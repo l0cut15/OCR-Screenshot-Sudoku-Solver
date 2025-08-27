@@ -53,6 +53,7 @@ class SudokuResult(BaseModel):
     confidence_scores: List[List[float]]
     recognition_sources: List[List[List[str]]]
     uncertain_cells: List[Tuple[int, int]]
+    validation_conflicts: Optional[List[dict]]
     processing_time: float
     valid_puzzle: bool
     unique_solution: bool
@@ -115,6 +116,7 @@ async def solve_sudoku(file: UploadFile = File(...)):
             confidence_scores=ocr_result["confidence_scores"],
             recognition_sources=ocr_result["recognition_sources"],
             uncertain_cells=ocr_result["uncertain_cells"],
+            validation_conflicts=ocr_result.get("validation_conflicts", []),
             processing_time=ocr_result["processing_time"],
             valid_puzzle=validation_result['is_valid'],
             unique_solution=solved_grid is not None,
