@@ -57,7 +57,7 @@ class OCRProcessor:
         """Create digit templates that are more similar to the actual Sudoku font"""
         templates = {}
         
-        # Create better digit templates using different font style
+        # Create simple, effective digit templates
         for digit in range(1, 10):
             template = np.ones((40, 30), dtype=np.uint8) * 255
             
@@ -363,7 +363,7 @@ class OCRProcessor:
     
     def preprocess_cell(self, cell: np.ndarray) -> np.ndarray:
         """
-        Minimal preprocessing for geometrically extracted clean cells
+        Improved preprocessing for better digit recognition
         """
         if cell.size == 0:
             return cell
@@ -375,15 +375,20 @@ class OCRProcessor:
         # Resize to standard size for OCR
         cell = cv2.resize(cell, (100, 100), interpolation=cv2.INTER_CUBIC)
         
-        # Simple thresholding - no adaptive since cells are clean
-        _, cell = cv2.threshold(cell, 127, 255, cv2.THRESH_BINARY)
+        # Use Otsu's thresholding for better adaptive thresholding
+        _, cell = cv2.threshold(cell, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
         # Ensure digits are black on white background
-        black_pixels = np.sum(cell < 127)
-        white_pixels = np.sum(cell >= 127)
+        black_pixels = np.sum(cell == 0)
+        white_pixels = np.sum(cell == 255)
         
         if black_pixels > white_pixels:
             cell = cv2.bitwise_not(cell)
+        
+        # Light morphological operations to clean up noise
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        cell = cv2.morphologyEx(cell, cv2.MORPH_CLOSE, kernel)
+        cell = cv2.morphologyEx(cell, cv2.MORPH_OPEN, kernel)
         
         return cell
     
@@ -456,12 +461,15 @@ class OCRProcessor:
             results = self.easyocr_reader.readtext(
                 cell_rgb,
                 allowlist='123456789',
-                width_ths=0.005,  # More sensitive to smaller text
-                height_ths=0.005,  # More sensitive to smaller text
+                width_ths=0.001,  # More sensitive to smaller text
+                height_ths=0.001,  # More sensitive to smaller text
                 paragraph=False,
                 detail=1,
-                low_text=0.3,  # Lower threshold for text detection
-                text_threshold=0.5  # Lower confidence threshold
+                low_text=0.2,  # Lower threshold for text detection
+                text_threshold=0.3,  # Lower confidence threshold for more detections
+                link_threshold=0.2,  # Lower threshold for text linking
+                canvas_size=1280,  # Larger canvas for better recognition
+                mag_ratio=2.0  # Higher magnification ratio
             )
             
             if not results:
@@ -553,37 +561,11 @@ class OCRProcessor:
         # Calculate the percentage of black pixels
         black_ratio = black_pixels / total_pixels
         
-        # If less than 0.5% of pixels are black, consider empty (even less aggressive)
-        return black_ratio < 0.005
+        # If less than 0.3% of pixels are black, consider empty (less aggressive)
+        return black_ratio < 0.003
     
     def enhanced_digit_recovery(self, cell: np.ndarray) -> Tuple[int, float]:
-        """Enhanced digit recovery using histogram equalization"""
-        if cell.size == 0:
-            return 0, 0.0
-        
-        try:
-            # Histogram equalization enhancement
-            equalized = cv2.equalizeHist(cell)
-            _, thresh = cv2.threshold(equalized, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            enhanced = cv2.resize(thresh, (100, 100), interpolation=cv2.INTER_CUBIC)
-            
-            # Ensure black digits on white background
-            if np.mean(enhanced) > 127:
-                enhanced = cv2.bitwise_not(enhanced)
-            
-            # Test with EasyOCR
-            easy_digit, easy_conf = self.recognize_digit_easyocr(enhanced)
-            if easy_digit > 0 and easy_conf > 0.3:
-                return easy_digit, easy_conf
-            
-            # Test with template matching
-            template_digit, template_conf = self.recognize_digit_template(enhanced)
-            if template_digit > 0 and template_conf > 0.3:
-                return template_digit, template_conf
-                
-        except Exception:
-            pass
-        
+        """Enhanced recovery disabled to prevent false positives"""
         return 0, 0.0
     
     def ensemble_recognition(self, cell: np.ndarray) -> Tuple[int, float, List[str]]:
@@ -605,12 +587,7 @@ class OCRProcessor:
             results.append(('template', template_digit, template_conf))
         
         if not results:
-            # Try enhanced recovery for cells with content
-            black_ratio = np.sum(cell < 127) / cell.size if cell.size > 0 else 0
-            if black_ratio > 0.005:  # Has significant content
-                enhanced_digit, enhanced_conf = self.enhanced_digit_recovery(cell)
-                if enhanced_digit > 0:
-                    return enhanced_digit, enhanced_conf, ["enhanced_recovery"]
+            # Enhanced recovery disabled to prevent false positives
             
             return 0, 0.0, ["no_detection"]
         
@@ -796,11 +773,8 @@ class OCRProcessor:
     def reassess_conflicted_digit(self, cell: np.ndarray, current_grid: List[List[int]], 
                                 row: int, col: int, original_detection: CellDetection) -> Tuple[int, float, List[str]]:
         """
-        Reassess a conflicted digit using enhanced methods and rule-based filtering
+        Reassess a conflicted digit using standard OCR methods and rule-based filtering
         """
-        # Try enhanced recovery first
-        enhanced_digit, enhanced_conf = self.enhanced_digit_recovery(cell)
-        
         # Get all possible digits from different OCR methods
         candidates = []
         
@@ -813,10 +787,6 @@ class OCRProcessor:
         template_digit, template_conf = self.recognize_digit_template(cell)
         if template_digit != 0:
             candidates.append((template_digit, template_conf, 'template'))
-        
-        # Enhanced recovery
-        if enhanced_digit != 0:
-            candidates.append((enhanced_digit, enhanced_conf, 'enhanced_recovery'))
         
         # Filter candidates by Sudoku rules
         valid_candidates = []

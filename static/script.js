@@ -520,6 +520,12 @@ class SudokuSolver {
     }
 
     showValidationSummary(conflicts) {
+        // Remove any existing validation summary first
+        const existingSummary = document.querySelector('.validation-summary');
+        if (existingSummary) {
+            existingSummary.remove();
+        }
+        
         const summaryDiv = document.createElement('div');
         summaryDiv.className = 'validation-summary';
         summaryDiv.style.cssText = `
@@ -724,6 +730,9 @@ class SudokuSolver {
 
     hideResults() {
         document.getElementById('results').style.display = 'none';
+        // Remove any validation summaries when hiding results
+        const validationSummaries = document.querySelectorAll('.validation-summary');
+        validationSummaries.forEach(summary => summary.remove());
     }
 
     showError(message) {
